@@ -1,0 +1,16 @@
+{
+  "name": "ai-movie-storyboard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI 电影分镜工具 — 基于 Claude API 将剧本/故事梗概拆解为专业电影分镜表",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.0"
+  }
+}

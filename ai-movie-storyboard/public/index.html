@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 电影分镜工具</title>
+<style>
+  :root {
+    --bg: #14110f;
+    --panel: #1f1a16;
+    --card: #262019;
+    --ink: #ece4d8;
+    --muted: #a99e8d;
+    --accent: #d97b4f;
+    --accent-ink: #21130c;
+    --line: #3a3127;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.6;
+  }
+  header {
+    padding: 28px 32px 18px;
+    border-bottom: 1px solid var(--line);
+  }
+  header h1 {
+    margin: 0;
+    font-family: Georgia, "Songti SC", serif;
+    font-size: 26px;
+    letter-spacing: 1px;
+  }
+  header h1 .clap { color: var(--accent); }
+  header p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+  .demo-banner {
+    display: none;
+    margin: 16px 32px 0;
+    padding: 10px 14px;
+    border: 1px dashed var(--accent);
+    border-radius: 8px;
+    color: var(--accent);
+    font-size: 13px;
+  }
+  main { display: grid; grid-template-columns: 380px 1fr; gap: 24px; padding: 24px 32px 48px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 20px;
+    align-self: start;
+  }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px; }
+  textarea, select {
+    width: 100%;
+    background: var(--card);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  textarea { min-height: 220px; resize: vertical; }
+  textarea:focus, select:focus { outline: 1px solid var(--accent); }
+  button {
+    cursor: pointer;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  .btn-primary {
+    width: 100%;
+    margin-top: 20px;
+    padding: 12px;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 700;
+    letter-spacing: 2px;
+  }
+  .btn-primary:disabled { opacity: .5; cursor: wait; }
+  .toolbar { display: none; gap: 10px; margin-bottom: 16px; }
+  .toolbar button {
+    padding: 8px 14px;
+    background: var(--card);
+    color: var(--ink);
+    border: 1px solid var(--line);
+  }
+  .toolbar button:hover { border-color: var(--accent); }
+
+  .board-head h2 { margin: 0 0 2px; font-family: Georgia, "Songti SC", serif; }
+  .board-head .meta { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+  .empty { color: var(--muted); padding: 60px 0; text-align: center; }
+  .error { color: #e57373; margin-top: 12px; font-size: 13px; }
+
+  .shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+  .shot {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+    page-break-inside: avoid;
+  }
+  .shot-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 10px 14px;
+    background: rgba(217,123,79,.12);
+    border-bottom: 1px solid var(--line);
+  }
+  .shot-no { font-family: Georgia, serif; font-size: 18px; color: var(--accent); }
+  .shot-tags { font-size: 12px; color: var(--muted); }
+  .shot-tags b { color: var(--ink); font-weight: 600; }
+  .shot-body { padding: 12px 14px; font-size: 13px; }
+  .shot-body dt { color: var(--muted); font-size: 12px; margin-top: 8px; }
+  .shot-body dd { margin: 2px 0 0; }
+  .shot-body dl { margin: 0; }
+  .prompt { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color: #b8c79a; word-break: break-all; }
+
+  @media print {
+    body { background: #fff; color: #000; }
+    header, .panel, .toolbar, .demo-banner { display: none !important; }
+    main { display: block; padding: 0; }
+    .shot { border: 1px solid #999; background: #fff; margin-bottom: 10px; }
+    .shot-top { background: #eee; }
+    .board-head .meta, .shot-tags, .shot-body dt { color: #555; }
+    .shot-no { color: #000; }
+    .prompt { color: #333; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="clap">🎬</span> AI 电影分镜工具</h1>
+  <p>输入剧本或故事梗概，自动生成专业分镜表：景别 · 运镜 · 台词 · 氛围 · 文生图提示词</p>
+</header>
+<div class="demo-banner" id="demoBanner">当前为演示模式：服务器未配置 ANTHROPIC_API_KEY，生成结果为内置示例数据。</div>
+
+<main>
+  <section class="panel">
+    <label for="script">剧本 / 故事梗概</label>
+    <textarea id="script" placeholder="例如：深夜的便利店，店员小林发现每天凌晨两点都会出现一位买同一款布丁的神秘老人……"></textarea>
+
+    <label for="style">视觉风格</label>
+    <select id="style">
+      <option value="电影感写实">电影感写实</option>
+      <option value="日系动漫">日系动漫</option>
+      <option value="赛博朋克">赛博朋克</option>
+      <option value="黑白胶片">黑白胶片</option>
+      <option value="水墨国风">水墨国风</option>
+      <option value="纪录片手持">纪录片手持</option>
+    </select>
+
+    <label for="shotCount">目标镜头数</label>
+    <select id="shotCount">
+      <option value="6">6 个（预告片节奏）</option>
+      <option value="12" selected>12 个（短片）</option>
+      <option value="20">20 个（完整段落）</option>
+      <option value="30">30 个（详细分镜）</option>
+    </select>
+
+    <button class="btn-primary" id="generateBtn">生 成 分 镜</button>
+    <div class="error" id="error"></div>
+  </section>
+
+  <section>
+    <div class="toolbar" id="toolbar">
+      <button id="exportJson">导出 JSON</button>
+      <button id="exportCsv">导出 CSV</button>
+      <button onclick="window.print()">打印 / 存为 PDF</button>
+    </div>
+    <div class="board-head" id="boardHead"></div>
+    <div class="shots" id="shots">
+      <div class="empty">分镜结果将显示在这里</div>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id)
+let currentBoard = null
+
+fetch('/api/status')
+  .then((r) => r.json())
+  .then(({ demo }) => { if (demo) $('demoBanner').style.display = 'block' })
+  .catch(() => {})
+
+$('generateBtn').addEventListener('click', async () => {
+  const script = $('script').value.trim()
+  $('error').textContent = ''
+  if (!script) {
+    $('error').textContent = '请先填写剧本或故事梗概。'
+    return
+  }
+  const btn = $('generateBtn')
+  btn.disabled = true
+  btn.textContent = '生成中，请稍候…'
+  try {
+    const res = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        script,
+        style: $('style').value,
+        shotCount: Number($('shotCount').value),
+      }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || `请求失败（${res.status}）`)
+    currentBoard = data.storyboard
+    render(currentBoard)
+  } catch (err) {
+    $('error').textContent = err.message
+  } finally {
+    btn.disabled = false
+    btn.textContent = '生 成 分 镜'
+  }
+})
+
+function render(board) {
+  $('toolbar').style.display = 'flex'
+  const total = board.shots.reduce((sum, s) => sum + (s.durationSeconds || 0), 0)
+  $('boardHead').innerHTML = `
+    <h2>${esc(board.title)}</h2>
+    <div class="meta">${esc(board.logline)}<br>
+    视觉风格：${esc(board.visualStyle)} ｜ 共 ${board.shots.length} 个镜头 ｜ 预估时长 ${Math.round(total)} 秒</div>`
+  $('shots').innerHTML = board.shots.map((s) => `
+    <article class="shot">
+      <div class="shot-top">
+        <span class="shot-no">镜 ${s.shotNumber}</span>
+        <span class="shot-tags"><b>${esc(s.shotSize)}</b> · ${esc(s.cameraMove)} · ${s.durationSeconds}s</span>
+      </div>
+      <div class="shot-body">
+        <dl>
+          <dt>场景</dt><dd>${esc(s.scene)}</dd>
+          <dt>画面</dt><dd>${esc(s.description)}</dd>
+          ${s.dialogue ? `<dt>台词 / 旁白</dt><dd>${esc(s.dialogue)}</dd>` : ''}
+          ${s.sound ? `<dt>声音</dt><dd>${esc(s.sound)}</dd>` : ''}
+          <dt>氛围</dt><dd>${esc(s.mood)}</dd>
+          <dt>文生图提示词</dt><dd class="prompt">${esc(s.imagePrompt)}</dd>
+        </dl>
+      </div>
+    </article>`).join('')
+}
+
+function esc(str) {
+  return String(str ?? '').replace(/[&<>"']/g, (ch) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[ch]))
+}
+
+function download(filename, mime, content) {
+  const blob = new Blob([content], { type: mime })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+
+$('exportJson').addEventListener('click', () => {
+  if (!currentBoard) return
+  download('storyboard.json', 'application/json', JSON.stringify(currentBoard, null, 2))
+})
+
+$('exportCsv').addEventListener('click', () => {
+  if (!currentBoard) return
+  const headers = ['镜号', '场景', '景别', '运镜', '时长(秒)', '画面描述', '台词/旁白', '声音', '氛围', '文生图提示词']
+  const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
+  const rows = currentBoard.shots.map((s) => [
+    s.shotNumber, s.scene, s.shotSize, s.cameraMove, s.durationSeconds,
+    s.description, s.dialogue, s.sound, s.mood, s.imagePrompt,
+  ].map(cell).join(','))
+  // BOM 前缀确保 Excel 正确识别 UTF-8 中文
+  download('storyboard.csv', 'text/csv;charset=utf-8', '﻿' + [headers.map(cell).join(','), ...rows].join('\n'))
+})
+</script>
+</body>
+</html>
