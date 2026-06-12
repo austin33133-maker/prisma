@@ -1,0 +1,314 @@
+// 数据模型:亚马逊卖家工具(卖家精灵同类产品)
+// 设计说明见 03-数据模型.md;连接信息按 Prisma 7 约定配置在 prisma.config.ts 中
+
+generator client {
+  provider = "prisma-client"
+  output   = "./generated"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ──────────────────────── 用户与商业化域 ────────────────────────
+
+enum PlanTier {
+  FREE
+  STANDARD
+  ADVANCED
+  VIP
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  EXPIRED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  displayName  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  /// 子账号归属的主账号(代运营/团队场景)
+  parentId String?
+  parent   User?   @relation("SubAccounts", fields: [parentId], references: [id])
+  children User[]  @relation("SubAccounts")
+
+  subscriptions   Subscription[]
+  usageRecords    UsageRecord[]
+  productTrackers ProductTracker[]
+  keywordTrackers KeywordTracker[]
+  alerts          Alert[]
+}
+
+/// 套餐定义:功能全量开放,套餐之间只差额度
+model Plan {
+  id   String   @id @default(cuid())
+  tier PlanTier @unique
+
+  monthlyPriceCents Int
+  annualPriceCents  Int
+
+  maxTrackedProducts  Int
+  maxTrackedKeywords  Int
+  dailyReverseLookups Int
+  dailyExports        Int
+  maxSubAccounts      Int @default(0)
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+  planId String
+  plan   Plan   @relation(fields: [planId], references: [id])
+
+  status           SubscriptionStatus @default(ACTIVE)
+  currentPeriodEnd DateTime
+  canceledAt       DateTime?
+  createdAt        DateTime           @default(now())
+
+  @@index([userId, status])
+}
+
+/// 额度消耗流水,按自然日聚合计数
+model UsageRecord {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  /// 计费动作,如 reverse_asin / keyword_mine / export
+  action String
+  /// 自然日(UTC),与 action 一起构成日额度计数维度
+  day    DateTime @db.Date
+  count  Int      @default(1)
+
+  @@unique([userId, action, day])
+}
+
+// ──────────────────────── 商品目录域 ────────────────────────
+
+model Marketplace {
+  id String @id // 如 "US" "JP" "DE"
+
+  name         String
+  amazonDomain String @unique // 如 "www.amazon.com"
+  currency     String // ISO 4217,如 "USD"
+
+  products   Product[]
+  keywords   Keyword[]
+  categories Category[]
+}
+
+model Category {
+  id            String      @id @default(cuid())
+  marketplaceId String
+  marketplace   Marketplace @relation(fields: [marketplaceId], references: [id])
+
+  /// 亚马逊类目节点 ID(browse node)
+  nodeId   String
+  name     String
+  parentId String?
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+
+  products Product[]
+
+  @@unique([marketplaceId, nodeId])
+}
+
+model Product {
+  id            String      @id @default(cuid())
+  marketplaceId String
+  marketplace   Marketplace @relation(fields: [marketplaceId], references: [id])
+
+  asin       String
+  title      String
+  brand      String?
+  imageUrl   String?
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id])
+
+  firstSeenAt   DateTime  @default(now())
+  lastCrawledAt DateTime?
+
+  dailyMetrics ProductDailyMetric[]
+  rankings     KeywordRanking[]
+  trackers     ProductTracker[]
+
+  @@unique([marketplaceId, asin])
+  @@index([brand])
+}
+
+/// ASIN 每日指标快照。MVP 阶段存 PostgreSQL,
+/// 数据量上来后迁 ClickHouse,本模型保留为类型契约
+model ProductDailyMetric {
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  date      DateTime @db.Date
+
+  priceCents     Int?
+  bsr            Int?
+  bsrCategoryId  String?
+  reviewCount    Int?
+  rating         Decimal? @db.Decimal(2, 1)
+  estimatedSales Int?
+  /// 销量预估模型版本,用于回溯与 A/B
+  estimateModelVersion String?
+
+  @@id([productId, date])
+  @@index([date])
+}
+
+// ──────────────────────── 关键词域 ────────────────────────
+
+model Keyword {
+  id            String      @id @default(cuid())
+  marketplaceId String
+  marketplace   Marketplace @relation(fields: [marketplaceId], references: [id])
+
+  text String
+  /// 词根,用于长尾词聚类
+  stem String?
+
+  dailyMetrics KeywordDailyMetric[]
+  rankings     KeywordRanking[]
+  trackers     KeywordTracker[]
+
+  @@unique([marketplaceId, text])
+  @@index([stem])
+}
+
+model KeywordDailyMetric {
+  keywordId String
+  keyword   Keyword  @relation(fields: [keywordId], references: [id])
+  date      DateTime @db.Date
+
+  searchVolume Int?
+  /// ABA 搜索频率排名,搜索量估算的主要来源
+  abaRank      Int?
+  purchaseRate Decimal? @db.Decimal(5, 4)
+
+  @@id([keywordId, date])
+}
+
+/// 关键词 × 商品 × 日期的搜索结果位次。
+/// 反查 ASIN = 按 productId 倒排本表
+model KeywordRanking {
+  keywordId String
+  keyword   Keyword  @relation(fields: [keywordId], references: [id])
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  date      DateTime @db.Date
+
+  page        Int
+  position    Int
+  isSponsored Boolean @default(false)
+
+  @@id([keywordId, productId, date, isSponsored])
+  @@index([productId, date])
+}
+
+// ──────────────────────── 追踪与告警域 ────────────────────────
+
+enum AlertKind {
+  PRICE_CHANGE
+  BSR_CHANGE
+  NEGATIVE_REVIEW
+  OUT_OF_STOCK
+  RANK_CHANGE
+}
+
+model ProductTracker {
+  id        String  @id @default(cuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id])
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  /// 告警阈值配置,如 { "priceChangePct": 10, "bsrTopN": 100 }
+  alertConfig Json?
+  createdAt   DateTime @default(now())
+
+  alerts Alert[]
+
+  @@unique([userId, productId])
+}
+
+model KeywordTracker {
+  id        String  @id @default(cuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id])
+  keywordId String
+  keyword   Keyword @relation(fields: [keywordId], references: [id])
+
+  /// 追踪该词下指定 ASIN 的排名(可选)
+  watchedAsin String?
+  createdAt   DateTime @default(now())
+
+  alerts Alert[]
+
+  @@unique([userId, keywordId, watchedAsin])
+}
+
+model Alert {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  productTrackerId String?
+  productTracker   ProductTracker? @relation(fields: [productTrackerId], references: [id])
+  keywordTrackerId String?
+  keywordTracker   KeywordTracker? @relation(fields: [keywordTrackerId], references: [id])
+
+  kind    AlertKind
+  /// 触发现场数据,如 { "oldPrice": 1999, "newPrice": 1499 }
+  payload Json
+  readAt  DateTime?
+  sentAt  DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, readAt])
+}
+
+// ──────────────────────── 采集域 ────────────────────────
+
+enum CrawlTaskType {
+  PRODUCT_DETAIL
+  SEARCH_RESULT
+  BESTSELLER
+}
+
+enum CrawlTaskStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+model CrawlTask {
+  id   String        @id @default(cuid())
+  type CrawlTaskType
+
+  marketplaceId String
+  /// 任务目标:ASIN、关键词或类目节点,按 type 解释
+  target        String
+  status        CrawlTaskStatus @default(PENDING)
+  attempts      Int             @default(0)
+  /// 解析失败时指向对象存储中的页面快照,供回放
+  snapshotKey   String?
+  error         String?
+
+  scheduledAt DateTime  @default(now())
+  finishedAt  DateTime?
+
+  @@index([status, scheduledAt])
+  @@index([marketplaceId, type, target])
+}
