@@ -99,7 +99,10 @@ sunny **train yard** to match the Subway-Surfers feel.
 - **Scene**: perspective camera trailing the runner (it also rises with the
   player so roof-running reads well), hemisphere + directional light, sky-blue
   fog, a scrolling `CanvasTexture` gravel/sleeper track, four steel rails, grass
-  strips, and a pool of recycling buildings + bushes for parallax depth.
+  strips, a sun, clouds, recycling overhead signal gantries spanning the track,
+  and a pool of recycling buildings + bushes for parallax depth. Trains are
+  built as detailed cars (rounded roof, dark window band, white livery stripe,
+  headlights and door seams).
 - **Character**: an articulated blocky runner (torso, backpack, head, cap, two
   arms and two legs on pivots). A run cycle swings the limbs via `sin(phase)`;
   jumping tucks the legs, rolling rotates the whole body forward. **Four skins**

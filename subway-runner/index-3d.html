@@ -212,6 +212,43 @@
           m.userData.side = side;
         }
 
+        // shared geometries (declared here so scenery/gantries can use them)
+        const GEO = { box: new THREE.BoxGeometry(1, 1, 1), coin: new THREE.CylinderGeometry(0.4, 0.4, 0.1, 18), orb: new THREE.SphereGeometry(0.48, 16, 16) };
+
+        // sun + clouds
+        const sunMesh = new THREE.Mesh(new THREE.SphereGeometry(6, 20, 20), new THREE.MeshBasicMaterial({ color: 0xfff3c0 }));
+        sunMesh.position.set(-26, 38, -78); scene.add(sunMesh);
+        function makeCloud() {
+          const g = new THREE.Group();
+          const m = new THREE.MeshBasicMaterial({ color: 0xffffff });
+          for (let i = 0; i < 4; i++) {
+            const s = new THREE.Mesh(new THREE.SphereGeometry(2 + Math.random() * 1.6, 8, 8), m);
+            s.position.set((Math.random() - 0.5) * 7, (Math.random() - 0.5) * 1.5, (Math.random() - 0.5) * 3); g.add(s);
+          }
+          return g;
+        }
+        for (let i = 0; i < 5; i++) {
+          const c = makeCloud();
+          c.position.set((Math.random() - 0.5) * 60, 20 + Math.random() * 10, -40 - Math.random() * 50); scene.add(c);
+        }
+
+        // overhead signal gantries / arches spanning the yard (decorative, no collision)
+        const gantries = [];
+        const gantryMat = new THREE.MeshStandardMaterial({ color: 0x8a8f99, roughness: 0.6, metalness: 0.5 });
+        function makeGantry() {
+          const g = new THREE.Group();
+          [-1, 1].forEach((s) => {
+            const post = new THREE.Mesh(GEO.box, gantryMat);
+            post.scale.set(0.3, 6.2, 0.3); post.position.set(s * (LANE_X * 1.5 + 0.5), 3.1, 0); g.add(post);
+          });
+          const beam = new THREE.Mesh(GEO.box, gantryMat);
+          beam.scale.set(LANE_X * 3 + 1.8, 0.5, 0.45); beam.position.y = 6; g.add(beam);
+          const sign = new THREE.Mesh(GEO.box, new THREE.MeshStandardMaterial({ color: 0x2f80ed, emissive: 0x102a5a }));
+          sign.scale.set(2.2, 1.0, 0.16); sign.position.y = 5.1; g.add(sign);
+          return g;
+        }
+        for (let i = 0; i < 4; i++) { const g = makeGantry(); g.position.z = -22 - i * 30; scene.add(g); gantries.push(g); }
+
         // ---------- Character ----------
         function mat(c) { return new THREE.MeshStandardMaterial({ color: c, roughness: 0.65 }); }
         function buildRunner(skin) {
@@ -247,8 +284,7 @@
 
         function applySkin(idx) { scene.remove(runner); runner = buildRunner(SKINS[idx]); scene.add(runner); }
 
-        // ---------- Shared geo ----------
-        const GEO = { box: new THREE.BoxGeometry(1, 1, 1), coin: new THREE.CylinderGeometry(0.4, 0.4, 0.1, 18), orb: new THREE.SphereGeometry(0.48, 16, 16) };
+        // ---------- Shared materials ----------
         const coinMat = new THREE.MeshStandardMaterial({ color: 0xffd54a, roughness: 0.25, metalness: 0.7, emissive: 0x6a4e00 });
 
         const POWER = {
@@ -281,11 +317,35 @@
 
         function makeTrainMesh(profile) {
           const grp = new THREE.Group();
-          const body = new THREE.Mesh(GEO.box, new THREE.MeshStandardMaterial({ color: profile.color, roughness: 0.45, metalness: 0.25 }));
-          body.scale.set(profile.hw, profile.hy, profile.len); body.position.y = profile.hy / 2; grp.add(body);
-          const win = new THREE.Mesh(GEO.box, new THREE.MeshStandardMaterial({ color: 0x2b2f38, roughness: 0.2, metalness: 0.5 }));
-          win.scale.set(profile.hw + 0.02, profile.hy * 0.32, profile.len * 0.86);
-          win.position.y = profile.hy * 0.62; grp.add(win);
+          const w = profile.hw, h = profile.hy, len = profile.len;
+          const bodyMat = new THREE.MeshStandardMaterial({ color: profile.color, roughness: 0.4, metalness: 0.3 });
+          // main body (roof top lands exactly at h = topY)
+          const body = new THREE.Mesh(GEO.box, bodyMat);
+          body.scale.set(w, h * 0.86, len); body.position.y = h * 0.43; grp.add(body);
+          // rounded roof cap
+          const roof = new THREE.Mesh(GEO.box, bodyMat);
+          roof.scale.set(w * 0.86, h * 0.2, len * 0.98); roof.position.y = h * 0.9; grp.add(roof);
+          // dark tinted window band
+          const win = new THREE.Mesh(GEO.box, new THREE.MeshStandardMaterial({ color: 0x1e2733, roughness: 0.15, metalness: 0.6 }));
+          win.scale.set(w + 0.03, h * 0.3, len * 0.82); win.position.y = h * 0.62; grp.add(win);
+          // white livery stripe
+          const stripe = new THREE.Mesh(GEO.box, new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.5 }));
+          stripe.scale.set(w + 0.04, h * 0.09, len * 0.9); stripe.position.y = h * 0.32; grp.add(stripe);
+          // headlights at the leading (-z) end
+          const lightMat = new THREE.MeshStandardMaterial({ color: 0xfff3b0, emissive: 0xffe066, emissiveIntensity: 0.9 });
+          [-0.5, 0.5].forEach((sx) => {
+            const l = new THREE.Mesh(GEO.box, lightMat);
+            l.scale.set(w * 0.22, h * 0.13, 0.12); l.position.set(sx * w * 0.34, h * 0.28, -len / 2 - 0.02); grp.add(l);
+          });
+          // door seams
+          const doorMat = new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.18 });
+          const doors = Math.max(1, Math.round(len / 3));
+          for (let i = 0; i < doors; i++) {
+            const d = new THREE.Mesh(GEO.box, doorMat);
+            d.scale.set(w + 0.02, h * 0.5, 0.08);
+            d.position.set(0, h * 0.4, -len / 2 + (i + 0.5) * (len / doors));
+            grp.add(d);
+          }
           return grp;
         }
         function addObstacle(lane, kind) {
@@ -453,6 +513,7 @@
           for (const c of coins) { c.z += dz; c.mesh.position.z = c.z; }
           for (const p of powerups) { p.z += dz; p.mesh.position.z = p.z; }
           for (const s of scenery) { s.position.z += dz; if (s.position.z > CAM.z + 8) resetScenery(s, s.userData.side, s.position.z - 100 - Math.random() * 12); }
+          for (const g of gantries) { g.position.z += dz; if (g.position.z > CAM.z + 6) g.position.z -= 4 * 30; }
 
           nextSpawn -= dz;
           if (nextSpawn <= 0) { spawnRow(); nextSpawn = Math.max(12, 21 - distance * 0.004); }

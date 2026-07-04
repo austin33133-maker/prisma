@@ -11,11 +11,12 @@ both self-contained and offline — no build step, no server, no network:
 ![3D gameplay](./screenshot-3d.png)
 
 The 3D version is a faithful Subway-Surfers-style runner set in a bright, sunny
-**train yard**: gravel track with wooden sleepers and steel rails, bushes and
-buildings. It features an animated blocky runner (backpack + cap) with **4
-selectable skins**, a **5-power-up system** (hoverboard · jetpack · magnet ·
-score ×2 · super-jump), and **synthesized sound effects & music** (Web Audio, no
-audio files).
+**train yard**: gravel track with wooden sleepers and steel rails, detailed
+train cars (window bands, livery stripes, headlights), overhead signal gantries,
+sun, clouds, bushes and buildings. It features an animated blocky runner
+(backpack + cap) with **4 selectable skins**, a **5-power-up system** (hoverboard
+· jetpack · magnet · score ×2 · super-jump), and **synthesized sound effects &
+music** (Web Audio, no audio files).
 
 Its signature move: **jump onto the trains and run along the roofs.**
 
