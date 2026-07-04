@@ -10,9 +10,16 @@ both self-contained and offline — no build step, no server, no network:
 
 ![3D gameplay](./screenshot-3d.png)
 
-The 3D version adds an animated blocky runner with **4 selectable skins**, a
-**power-up system** (magnet · jetpack · shield · score ×2), **synthesized sound
-effects & music** (Web Audio, no audio files), and a scrolling city.
+The 3D version is a faithful Subway-Surfers-style runner set in a bright, sunny
+**train yard**: gravel track with wooden sleepers and steel rails, bushes and
+buildings. It features an animated blocky runner (backpack + cap) with **4
+selectable skins**, a **5-power-up system** (hoverboard · jetpack · magnet ·
+score ×2 · super-jump), and **synthesized sound effects & music** (Web Audio, no
+audio files).
+
+Its signature move: **jump onto the trains and run along the roofs.**
+
+![Running on a train roof](./screenshot-3d-train.png)
 
 ## Play
 
@@ -37,27 +44,33 @@ track keeps getting faster. One hit ends the run.
 |---------------|-----------------------|------------------|
 | Switch lane   | `←` `→` or `A` `D`    | swipe left/right |
 | Jump          | `↑` / `W` / `Space`   | swipe up / tap   |
-| Slide         | `↓` / `S`             | swipe down       |
+| Roll / slide  | `↓` / `S`             | swipe down       |
 | Start / retry | `Enter` or the button | tap the button   |
 | Mute (3D)     | `M` or the 🔊 button  | tap the 🔊 button |
+
+**Tip:** jump onto a low (yellow) train and you'll land and run along its roof —
+then hop back down or onto the next one. Tall (red) trains are too high, so you
+must switch lanes for those.
 
 ## Power-ups (3D version)
 
 Grab the glowing orbs floating in a lane:
 
+- 🛹 **Hoverboard** — ride a board that shrugs off crashes for its duration (then absorbs one final hit).
+- 🚀 **Jetpack** — fly above the yard, sailing over every obstacle while you auto-collect coins.
 - 🧲 **Magnet** — pulls nearby coins toward you.
-- 🚀 **Jetpack** — fly above the track, sailing over every obstacle while you auto-collect coins.
-- 🛡️ **Shield** — absorbs one hit instead of ending the run.
 - ✨ **Score ×2** — doubles all points while active.
+- 👟 **Super Jump** — jump noticeably higher, making train roofs easy to reach.
 
 Active power-ups show a countdown bar in the HUD. Pick your character skin on the
 start screen (saved for next time).
 
 ## Obstacles
 
-- 🟥 **Train** (tall red) — you can't get past it in-lane; **switch lanes**.
-- 🟧 **Barrier** (low orange) — **jump** over it.
-- 🟦 **Beam** (floating blue) — **slide** under it.
+- 🟥 **Tall train** (red) — too high to mount; **switch lanes**.
+- 🟨 **Low train** (yellow) — **jump onto the roof** and run along it, or switch lanes.
+- 🟧 **Barrier** (orange) — **jump** over it.
+- 🟦 **Signal beam** (blue) — **roll/slide** under it.
 - 🟡 **Coins** — line up with the lane to collect; some arc into the air, so jump for them.
 
 Your best score is saved in the browser (`localStorage`).

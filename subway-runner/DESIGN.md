@@ -91,30 +91,62 @@ automated smoke-testing in a headless browser.
 
 ## 7. The 3D version (`index-3d.html`)
 
-A second, flagship build renders the same game as **real 3D with Three.js**
-(r150 UMD, bundled locally as `three.min.js` so `file://` works offline). It
-keeps the world-moves-toward-the-camera model but in true 3D space:
+The flagship build renders the game as **real 3D with Three.js** (r150 UMD,
+bundled locally as `three.min.js` so `file://` works offline). It keeps the
+world-moves-toward-the-camera model but in true 3D space, themed as a bright,
+sunny **train yard** to match the Subway-Surfers feel.
 
-- **Scene**: perspective camera trailing the runner, hemisphere + directional
-  lights, fog, a scrolling `CanvasTexture` track, side rails, and a pool of
-  recycling city buildings for parallax depth.
-- **Character**: an articulated blocky runner (torso, head, cap, two arms, two
-  legs on pivots). A run cycle swings the limbs via `sin(phase)`; jumping tucks
-  the legs, sliding rotates the whole body back. **Four skins** (color sets)
+- **Scene**: perspective camera trailing the runner (it also rises with the
+  player so roof-running reads well), hemisphere + directional light, sky-blue
+  fog, a scrolling `CanvasTexture` gravel/sleeper track, four steel rails, grass
+  strips, and a pool of recycling buildings + bushes for parallax depth.
+- **Character**: an articulated blocky runner (torso, backpack, head, cap, two
+  arms and two legs on pivots). A run cycle swings the limbs via `sin(phase)`;
+  jumping tucks the legs, rolling rotates the whole body forward. **Four skins**
   are selectable on the menu and persisted.
-- **Power-up system** — floating orbs grant a timed effect:
-  - **Magnet**: lerps nearby coins toward the player and auto-collects them.
-  - **Jetpack**: raises the player above the track; obstacle collisions are
-    skipped and coins auto-collect for the duration.
-  - **Shield**: consumes one otherwise-fatal hit, with brief invulnerability.
-  - **Score ×2**: doubles score and coin value while active.
-  Remaining time is shown as HUD countdown bars.
+
+### Obstacles & the roof-running mechanic
+
+Four obstacle kinds, each with a `topY` (roof height) and a `standable` flag:
+
+| Kind | Colour | Roof | Avoid by |
+|------|--------|------|----------|
+| Tall train | red | 3.2 (unreachable) | switch lanes |
+| Low train  | yellow | 1.7 | **jump onto the roof and run**, or switch lanes |
+| Barrier    | orange | 1.0 | jump over |
+| Signal beam| blue | floats high | roll/slide under |
+
+Vertical physics uses a per-frame **support height**: each frame the game finds
+the tallest `standable` obstacle the player currently overlaps (same lane, z
+within the obstacle's length) whose roof the player is at or above while
+descending, and uses that as the ground. Gravity then lands the player on the
+roof; when the train slides out from under them the support drops back to 0 and
+they fall. Running into a train below its roof height is a crash — so you must
+jump *before* reaching a low train to mount it. Jump velocity is tuned to just
+clear a low-train roof but fall short of a tall one, which is what forces the
+lane change for tall trains.
+
+### Power-ups (floating orbs, timed effects)
+
+- **Hoverboard**: crash-proof for the duration (shows a board under the feet);
+  the final hit is still absorbed once with brief invulnerability.
+- **Jetpack**: raises the player above the yard; obstacle collisions are skipped
+  and coins auto-collect.
+- **Magnet**: lerps nearby coins toward the player and auto-collects them.
+- **Score ×2**: doubles score and coin value.
+- **Super Jump**: boosts jump velocity so roofs are easy to reach.
+
+Remaining time shows as HUD countdown bars.
+
 - **Audio** — a small Web Audio engine synthesizes all sound (no files): jump,
-  coin, power-up arpeggio, and crash SFX, plus a looping bass/blip music
+  land, coin, power-up arpeggio and crash SFX, plus a looping bass/blip music
   sequencer. Mutable via `M` / a button, persisted in `localStorage`.
 
-Collision, spawning (always one free lane) and difficulty scaling mirror the 2D
-version. A `window.__dash3d` hook exists for headless WebGL smoke-testing.
+Spawning always leaves one free lane, difficulty scales with distance, and the
+render loop schedules its next frame *first* so a stray error can never freeze
+the game. A `window.__dash3d` hook (state, `playerY`, `onTrain`, `givePower`,
+`debugTrain`, inputs) exists for headless WebGL smoke-testing — including
+verifying that the player can mount and run on a train roof.
 
 ## 8. Possible extensions
 
