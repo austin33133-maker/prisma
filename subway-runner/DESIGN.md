@@ -101,8 +101,12 @@ sunny **train yard** to match the Subway-Surfers feel.
   fog, a scrolling `CanvasTexture` gravel/sleeper track, four steel rails, grass
   strips, a sun, clouds, recycling overhead signal gantries spanning the track,
   and a pool of recycling buildings + bushes for parallax depth. Trains are
-  built as detailed cars (rounded roof, dark window band, white livery stripe,
-  headlights and door seams).
+  built as detailed cars: a rounded roof cap plus a body wrapped in a
+  `CanvasTexture` that paints windows, doors and a white livery stripe (tiled
+  along the car length), with emissive headlights. Coins and power-ups carry an
+  additive glow sprite for a cheap bloom-like halo (no post-processing needed,
+  so it works with the UMD build). A game starts with a 3-2-1-GO countdown that
+  freezes the world while the runner jogs in place.
 - **Character**: an articulated blocky runner (torso, backpack, head, cap, two
   arms and two legs on pivots). A run cycle swings the limbs via `sin(phase)`;
   jumping tucks the legs, rolling rotates the whole body forward. **Four skins**

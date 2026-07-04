@@ -55,6 +55,11 @@
         border-radius: 50%; }
       #loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
         font-size: 16px; opacity: .8; }
+      #countdown { position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+        font-size: clamp(80px, 26vw, 160px); font-weight: 900; color: #fff; pointer-events: none;
+        text-shadow: 0 6px 24px rgba(0,0,0,.5); }
+      #countdown.show { display: flex; animation: pop .4s ease; }
+      @keyframes pop { from { transform: scale(1.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
     </style>
   </head>
   <body>
@@ -67,6 +72,7 @@
         </div>
         <div id="speed">SPEED 0</div>
         <div id="powerups"></div>
+        <div id="countdown"></div>
       </div>
 
       <button id="muteBtn" title="Mute">🔊</button>
@@ -287,6 +293,22 @@
         // ---------- Shared materials ----------
         const coinMat = new THREE.MeshStandardMaterial({ color: 0xffd54a, roughness: 0.25, metalness: 0.7, emissive: 0x6a4e00 });
 
+        // additive glow halo (cheap "bloom" that works with the UMD build)
+        const glowTex = (function () {
+          const c = document.createElement('canvas'); c.width = c.height = 64;
+          const g = c.getContext('2d');
+          const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+          grad.addColorStop(0, 'rgba(255,255,255,1)');
+          grad.addColorStop(0.4, 'rgba(255,255,255,0.55)');
+          grad.addColorStop(1, 'rgba(255,255,255,0)');
+          g.fillStyle = grad; g.fillRect(0, 0, 64, 64);
+          return new THREE.CanvasTexture(c);
+        })();
+        function glowSprite(color, scale) {
+          const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
+          s.scale.set(scale, scale, scale); return s;
+        }
+
         const POWER = {
           hoverboard: { color: 0x00e0c0, dur: 9,  label: 'HOVERBOARD' },
           jetpack:    { color: 0x6f8cff, dur: 5,  label: 'JETPACK' },
@@ -301,7 +323,7 @@
         let state = State.MENU;
         const player = { lane: 0, x: 0, y: 0, vy: 0, grounded: true, rolling: false, rollT: 0, phase: 0, onTrain: false };
         let obstacles = [], coins = [], powerups = [];
-        let speed = 26, distance = 0, score = 0, coinCount = 0, nextSpawn = 22, shakeT = 0, active = {}, invuln = 0;
+        let speed = 26, distance = 0, score = 0, coinCount = 0, nextSpawn = 22, shakeT = 0, active = {}, invuln = 0, countdown = 0;
         let best = Number(localStorage.getItem('dash3d_best') || 0);
 
         function clearArr(arr) { arr.forEach((o) => scene.remove(o.mesh)); arr.length = 0; }
@@ -309,43 +331,46 @@
           clearArr(obstacles); clearArr(coins); clearArr(powerups);
           player.lane = 0; player.x = 0; player.y = 0; player.vy = 0; player.grounded = true;
           player.rolling = false; player.rollT = 0; player.phase = 0; player.onTrain = false;
-          speed = 26; distance = 0; score = 0; coinCount = 0; nextSpawn = 22; shakeT = 0; active = {}; invuln = 0;
+          speed = 26; distance = 0; score = 0; coinCount = 0; nextSpawn = 22; shakeT = 0; active = {}; invuln = 0; countdown = 2.0;
         }
 
         // ---------- Spawning ----------
         function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; } }
 
+        const trainTexCache = {};
+        function trainTexture(hex) {
+          if (trainTexCache[hex]) return trainTexCache[hex];
+          const c = document.createElement('canvas'); c.width = 96; c.height = 96;
+          const g = c.getContext('2d');
+          g.fillStyle = '#' + hex.toString(16).padStart(6, '0'); g.fillRect(0, 0, 96, 96);
+          g.fillStyle = '#f5f5f5'; g.fillRect(0, 66, 96, 10);                 // livery stripe
+          g.fillStyle = '#132030';                                            // window
+          g.fillRect(14, 20, 68, 30);
+          g.strokeStyle = 'rgba(0,0,0,0.3)'; g.lineWidth = 4; g.strokeRect(14, 20, 68, 30);
+          g.fillStyle = 'rgba(255,255,255,0.12)'; g.fillRect(20, 24, 26, 10); // glass glint
+          g.fillStyle = 'rgba(0,0,0,0.18)';                                   // door seams
+          g.fillRect(6, 18, 4, 62); g.fillRect(86, 18, 4, 62);
+          const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping;
+          trainTexCache[hex] = t; return t;
+        }
         function makeTrainMesh(profile) {
           const grp = new THREE.Group();
           const w = profile.hw, h = profile.hy, len = profile.len;
-          const bodyMat = new THREE.MeshStandardMaterial({ color: profile.color, roughness: 0.4, metalness: 0.3 });
-          // main body (roof top lands exactly at h = topY)
-          const body = new THREE.Mesh(GEO.box, bodyMat);
+          const tex = trainTexture(profile.color).clone();
+          tex.needsUpdate = true; tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+          tex.repeat.set(Math.max(1, Math.round(len / 2.4)), 1);
+          // main body (textured; roof top lands exactly at h = topY)
+          const body = new THREE.Mesh(GEO.box, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.4, metalness: 0.3 }));
           body.scale.set(w, h * 0.86, len); body.position.y = h * 0.43; grp.add(body);
-          // rounded roof cap
-          const roof = new THREE.Mesh(GEO.box, bodyMat);
-          roof.scale.set(w * 0.86, h * 0.2, len * 0.98); roof.position.y = h * 0.9; grp.add(roof);
-          // dark tinted window band
-          const win = new THREE.Mesh(GEO.box, new THREE.MeshStandardMaterial({ color: 0x1e2733, roughness: 0.15, metalness: 0.6 }));
-          win.scale.set(w + 0.03, h * 0.3, len * 0.82); win.position.y = h * 0.62; grp.add(win);
-          // white livery stripe
-          const stripe = new THREE.Mesh(GEO.box, new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.5 }));
-          stripe.scale.set(w + 0.04, h * 0.09, len * 0.9); stripe.position.y = h * 0.32; grp.add(stripe);
+          // rounded roof cap (solid livery colour)
+          const roof = new THREE.Mesh(GEO.box, new THREE.MeshStandardMaterial({ color: profile.color, roughness: 0.4, metalness: 0.35 }));
+          roof.scale.set(w * 0.9, h * 0.22, len * 0.98); roof.position.y = h * 0.9; grp.add(roof);
           // headlights at the leading (-z) end
-          const lightMat = new THREE.MeshStandardMaterial({ color: 0xfff3b0, emissive: 0xffe066, emissiveIntensity: 0.9 });
+          const lightMat = new THREE.MeshStandardMaterial({ color: 0xfff3b0, emissive: 0xffe066, emissiveIntensity: 0.95 });
           [-0.5, 0.5].forEach((sx) => {
             const l = new THREE.Mesh(GEO.box, lightMat);
             l.scale.set(w * 0.22, h * 0.13, 0.12); l.position.set(sx * w * 0.34, h * 0.28, -len / 2 - 0.02); grp.add(l);
           });
-          // door seams
-          const doorMat = new THREE.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.18 });
-          const doors = Math.max(1, Math.round(len / 3));
-          for (let i = 0; i < doors; i++) {
-            const d = new THREE.Mesh(GEO.box, doorMat);
-            d.scale.set(w + 0.02, h * 0.5, 0.08);
-            d.position.set(0, h * 0.4, -len / 2 + (i + 0.5) * (len / doors));
-            grp.add(d);
-          }
           return grp;
         }
         function addObstacle(lane, kind) {
@@ -364,11 +389,13 @@
         }
         function addCoin(lane, z, y) {
           const m = new THREE.Mesh(GEO.coin, coinMat); m.rotation.x = Math.PI / 2;
+          const glow = glowSprite(0xffe066, 1.5); m.add(glow);
           m.position.set(lane * LANE_X, y, z); scene.add(m); coins.push({ mesh: m, lane, z, y, got: false });
         }
         function addPowerup(lane, z) {
           const key = POWER_KEYS[(Math.random() * POWER_KEYS.length) | 0];
           const m = new THREE.Mesh(GEO.orb, new THREE.MeshStandardMaterial({ color: POWER[key].color, emissive: POWER[key].color, emissiveIntensity: 0.55, roughness: 0.3 }));
+          m.add(glowSprite(POWER[key].color, 2.2));
           m.position.set(lane * LANE_X, 1.5, z); scene.add(m); powerups.push({ mesh: m, lane, z, key });
         }
         function spawnRow() {
@@ -500,6 +527,14 @@
           for (const p of powerups) { p.mesh.rotation.y += dt * 2.2; p.mesh.position.y = 1.5 + Math.sin(performance.now() / 300) * 0.15; }
           if (state !== State.PLAY) return;
 
+          if (countdown > 0) {
+            const prev = countdown; countdown -= dt;
+            player.phase += dt * 6;            // jog in place until GO
+            showCountdown(countdown, prev);
+            if (countdown > 0) return;
+            el('countdown').classList.remove('show');
+          }
+
           speed = 26 + distance * 0.021;
           const mult = active.x2 ? 2 : 1;
           distance += speed * dt; score += speed * dt * 0.9 * mult;
@@ -593,6 +628,16 @@
           if (shakeT > 0) shakeT -= dt;
         }
         function collectCoin(c) { if (c.got) return; c.got = true; coinCount++; score += 12 * (active.x2 ? 2 : 1); Audio.coin(); }
+
+        function showCountdown(cd) {
+          const e = el('countdown');
+          const label = cd > 1.4 ? '3' : cd > 0.8 ? '2' : cd > 0.35 ? '1' : 'GO!';
+          if (e.textContent !== label) {
+            e.textContent = label;
+            e.classList.remove('show'); void e.offsetWidth; e.classList.add('show');
+            if (label === 'GO!') Audio.power(); else Audio.coin();
+          }
+        }
 
         // ---------- Character animation ----------
         function animateRunner() {
