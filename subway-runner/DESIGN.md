@@ -1,7 +1,8 @@
 # Dash Runner — Design Document
 
-A Subway-Surfers-style endless runner (模仿地铁跑酷同款), implemented in a single
-HTML file with Canvas 2D. No frameworks, no build.
+A Subway-Surfers-style endless runner (模仿地铁跑酷同款). Ships in two
+self-contained builds: a **2D Canvas** version (`index.html`, sections 1–6 below)
+and a **3D Three.js** version (`index-3d.html`, section 7). No build step.
 
 ## 1. Goal
 
@@ -88,10 +89,36 @@ One file, a single IIFE:
 A tiny `window.__dash` hook (state/score/coins/inputs) exists purely to allow
 automated smoke-testing in a headless browser.
 
-## 7. Possible extensions
+## 7. The 3D version (`index-3d.html`)
 
-- Sprite/skeletal character art and running animation frames
-- Power-ups (magnet, jetpack, score multiplier, shield)
-- Sound effects and music
-- A real 3D version with Three.js (models, textured trains, a proper city)
-- Missions / daily challenges and a coin shop
+A second, flagship build renders the same game as **real 3D with Three.js**
+(r150 UMD, bundled locally as `three.min.js` so `file://` works offline). It
+keeps the world-moves-toward-the-camera model but in true 3D space:
+
+- **Scene**: perspective camera trailing the runner, hemisphere + directional
+  lights, fog, a scrolling `CanvasTexture` track, side rails, and a pool of
+  recycling city buildings for parallax depth.
+- **Character**: an articulated blocky runner (torso, head, cap, two arms, two
+  legs on pivots). A run cycle swings the limbs via `sin(phase)`; jumping tucks
+  the legs, sliding rotates the whole body back. **Four skins** (color sets)
+  are selectable on the menu and persisted.
+- **Power-up system** — floating orbs grant a timed effect:
+  - **Magnet**: lerps nearby coins toward the player and auto-collects them.
+  - **Jetpack**: raises the player above the track; obstacle collisions are
+    skipped and coins auto-collect for the duration.
+  - **Shield**: consumes one otherwise-fatal hit, with brief invulnerability.
+  - **Score ×2**: doubles score and coin value while active.
+  Remaining time is shown as HUD countdown bars.
+- **Audio** — a small Web Audio engine synthesizes all sound (no files): jump,
+  coin, power-up arpeggio, and crash SFX, plus a looping bass/blip music
+  sequencer. Mutable via `M` / a button, persisted in `localStorage`.
+
+Collision, spawning (always one free lane) and difficulty scaling mirror the 2D
+version. A `window.__dash3d` hook exists for headless WebGL smoke-testing.
+
+## 8. Possible extensions
+
+- Sprite/skeletal character art with texture maps
+- More power-ups (double-jump, coin bomb) and a coin shop to unlock skins
+- Missions / daily challenges and online leaderboards
+- Real shadow mapping and post-processing (bloom on coins/power-ups)
