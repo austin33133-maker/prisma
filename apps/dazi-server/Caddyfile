@@ -1,0 +1,5 @@
+# Replace api.yourdomain.com with your real domain before deploying.
+# Caddy obtains and renews the HTTPS certificate automatically.
+api.yourdomain.com {
+	reverse_proxy api:3000
+}

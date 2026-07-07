@@ -1,0 +1,95 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(cuid())
+  name        String
+  age         Int?
+  city        String?
+  bio         String?
+  avatarColor String
+  interests   String   @default("[]")
+  createdAt   DateTime @default(now())
+
+  tokens         AuthToken[]
+  hostedActivities Activity[]        @relation("ActivityHost")
+  memberships    ActivityMember[]
+  threadMemberships ThreadParticipant[]
+  messages       Message[]
+}
+
+model AuthToken {
+  token     String   @id
+  userId    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Activity {
+  id          String   @id @default(cuid())
+  hostId      String
+  category    String
+  title       String
+  description String
+  place       String
+  startsAt    DateTime
+  maxMembers  Int
+  distanceKm  Float    @default(0)
+  createdAt   DateTime @default(now())
+
+  host    User             @relation("ActivityHost", fields: [hostId], references: [id])
+  members ActivityMember[]
+  thread  ChatThread?
+}
+
+model ActivityMember {
+  activityId String
+  userId     String
+  joinedAt   DateTime @default(now())
+
+  activity Activity @relation(fields: [activityId], references: [id])
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@id([activityId, userId])
+}
+
+model ChatThread {
+  id         String   @id @default(cuid())
+  kind       String
+  title      String
+  activityId String?  @unique
+  createdAt  DateTime @default(now())
+
+  activity     Activity?           @relation(fields: [activityId], references: [id])
+  participants ThreadParticipant[]
+  messages     Message[]
+}
+
+model ThreadParticipant {
+  threadId String
+  userId   String
+
+  thread ChatThread @relation(fields: [threadId], references: [id])
+  user   User       @relation(fields: [userId], references: [id])
+
+  @@id([threadId, userId])
+}
+
+model Message {
+  id       String   @id @default(cuid())
+  threadId String
+  senderId String
+  text     String
+  sentAt   DateTime @default(now())
+
+  thread ChatThread @relation(fields: [threadId], references: [id])
+  sender User       @relation(fields: [senderId], references: [id])
+
+  @@index([threadId, sentAt])
+}
